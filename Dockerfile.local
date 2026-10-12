@@ -1,0 +1,9 @@
+# 离线/本地构建用：使用预编译的 cfscan 二进制（scratch，无需拉取任何基础镜像）
+# 构建上下文需包含：cfscan（对应架构的二进制）、ca-certificates.crt
+FROM scratch
+COPY cfscan /cfscan
+COPY ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+ENV TZ=Asia/Shanghai
+VOLUME /data
+EXPOSE 8080
+ENTRYPOINT ["/cfscan", "serve", "-addr", ":8080", "-data", "/data"]

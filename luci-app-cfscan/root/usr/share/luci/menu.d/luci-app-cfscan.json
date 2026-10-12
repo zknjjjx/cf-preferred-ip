@@ -1,0 +1,1 @@
+{"admin/services/cfscan":{"action":{"path":"cfscan","type":"view"},"depends":{"acl":["luci-app-cfscan"]},"order":61,"title":"优选IP扫描"}}

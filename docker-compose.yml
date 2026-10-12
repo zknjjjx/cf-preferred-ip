@@ -1,0 +1,11 @@
+services:
+  cfscan:
+    image: cfscan:latest
+    container_name: cfscan
+    restart: unless-stopped
+    ports:
+      - "7788:8080"
+    volumes:
+      - ./data:/data
+    environment:
+      - TZ=Asia/Shanghai

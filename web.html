@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cfscan 优选 IP 扫描</title>
+<style>
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; margin: 0; background: #f4f5f7; color: #222; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 8px 0 2px; }
+  .sub { color: #666; font-size: 13px; margin-bottom: 14px; }
+  .card { background: #fff; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .card h2 { font-size: 15px; margin: 0 0 10px; border-left: 4px solid #f48120; padding-left: 8px; }
+  label { display: block; font-size: 13px; color: #444; margin: 10px 0 4px; }
+  input[type=text], input[type=password], input[type=number], input[type=time], select {
+    width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+  .row { display: flex; gap: 12px; } .row > div { flex: 1; }
+  .chk { display: flex; align-items: center; gap: 6px; font-size: 14px; margin-top: 10px; }
+  button { border: 0; border-radius: 6px; padding: 10px 18px; font-size: 14px; cursor: pointer; }
+  .primary { background: #f48120; color: #fff; }
+  .plain { background: #e8eaed; }
+  button:disabled { opacity: .5; cursor: wait; }
+  pre { background: #111; color: #c8e6c9; padding: 10px; border-radius: 6px; font-size: 12px; max-height: 260px; overflow: auto; white-space: pre-wrap; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td { padding: 4px 6px; border-bottom: 1px solid #eee; font-family: ui-monospace, monospace; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; background: #e8eaed; }
+  .run { background: #fff3e0; } .ok { background: #e6f4ea; }
+  .hint { font-size: 12px; color: #888; margin-top: 4px; }
+  .msg { font-size: 13px; margin-left: 10px; color: #188038; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>cfscan 优选 IP 扫描</h1>
+  <div class="sub">每天定时扫描 Cloudflare 优选 IP，验活后直推 cfnew、推 GitHub 仓库供 edgetunnel 拉取。</div>
+
+  <div class="card">
+    <h2>状态</h2>
+    <div>状态：<span id="stRun" class="tag">读取中</span> <span class="hint">上次完成：<span id="stLast">-</span></span></div>
+    <div style="margin-top:10px">
+      <button class="primary" id="btnRun">立即扫描一次</button>
+      <span class="msg" id="runMsg"></span>
+    </div>
+    <div class="row">
+      <div><label>cfnew 当前名单</label><table id="tblCfnew"></table></div>
+      <div><label>edgetunnel 当前名单</label><table id="tblEdt"></table></div>
+    </div>
+    <label>运行日志</label>
+    <pre id="log">...</pre>
+  </div>
+
+  <div class="card">
+    <h2>测试域名（验活）</h2>
+    <div class="row">
+      <div><label>cfnew 域名</label><input type="text" id="cfnewDomain" placeholder="如 cfnew.你的域名.com"></div>
+      <div><label>edgetunnel 域名</label><input type="text" id="edgetunnelDomain" placeholder="如 edt.你的域名.com"></div>
+    </div>
+    <label>验活路径</label><input type="text" id="verifyPath">
+    <div class="hint">这两个域名就是“测试域名”：程序拿它们逐个候选 IP 建 TLS 实测，能通才入选。必须填你自己部署的域名——谁安装这个项目，就填谁自己的。</div>
+  </div>
+
+  <div class="card">
+    <h2>扫描参数</h2>
+    <label>国家 / 地区</label>
+    <select id="coloSel">
+      <option value="">不限（谁快选谁）</option>
+      <option value="US">美国</option>
+      <option value="JP">日本</option>
+      <option value="HK">香港</option>
+      <option value="SG">新加坡</option>
+      <option value="KR">韩国</option>
+      <option value="TW">台湾</option>
+      <option value="DE">德国</option>
+      <option value="GB">英国</option>
+      <option value="CA">加拿大</option>
+      <option value="AU">澳大利亚</option>
+      <option value="IN">印度</option>
+      <option value="NL">荷兰</option>
+      <option value="SE">瑞典</option>
+      <option value="__custom">自定义机场码…</option>
+    </select>
+    <input type="text" id="coloCustom" placeholder="如 LAX,SJC（逗号分隔）" style="display:none;margin-top:6px">
+    <div class="row">
+      <div><label>速度下限 MB/s</label><input type="number" id="minSpeed" step="0.1" min="0"></div>
+      <div><label>输出数量（每轮）</label><input type="number" id="limit" min="1" max="50"></div>
+    </div>
+    <div class="row">
+      <div><label>延迟上限 ms</label><input type="number" id="maxLatency" min="50" step="10"></div>
+      <div><label>测速端口</label><input type="number" id="port"></div>
+      <div><label>扫描线程（路由器建议 50）</label><input type="number" id="threads" min="10" max="200"></div>
+    </div>
+    <div class="hint">选远地区（如美国）时延迟上限建议放宽到 500 以上，否则可能全被延迟筛掉。</div>
+  </div>
+
+  <div class="card">
+    <h2>推送设置</h2>
+    <div class="chk"><input type="checkbox" id="enableCfnew"> 启用 cfnew 直推（API）</div>
+    <label>cfnew 推送网址（完整地址，可选）</label><input type="text" id="cfnewPushURL" placeholder="如 https://cfnew.你的域名.com/你的UUID">
+    <div class="hint">填了推送网址就按网址推（网址里已含 UUID/路径）；与下面 UUID 二选一，网址优先。</div>
+    <label>cfnew UUID</label><input type="password" id="cfnewUUID" autocomplete="off">
+    <label>cfnew 自定义路径 d（设了就替代 UUID，可留空）</label><input type="text" id="cfnewPath">
+    <div class="hint">直推前需在 cfnew 面板开启「允许 API 管理」（ae=yes）。</div>
+    <div class="chk"><input type="checkbox" id="enableGithub"> 启用 GitHub 仓库推送（edgetunnel 拉取用）</div>
+    <div class="row">
+      <div><label>仓库 owner/repo</label><input type="text" id="ghRepo" placeholder="如 yourname/cf-preferred-ip"></div>
+      <div><label>GitHub Token</label><input type="password" id="ghToken" autocomplete="off"></div>
+    </div>
+    <div class="hint">Token 只需该仓库 Contents 读写权限。密钥只保存在路由器容器数据里，不会上传到任何地方。</div>
+  </div>
+
+  <div class="card">
+    <h2>定时</h2>
+    <div class="chk"><input type="checkbox" id="scheduleOn"> 启用每日定时扫描</div>
+    <label>每天执行时间（北京时间）</label><input type="time" id="scheduleAt">
+    <label>单轮最长运行时间（分钟）</label><input type="number" id="timeoutMin" min="5" max="120">
+    <div class="hint">到点还没跑完会强制结束这一轮，防止卡死。</div>
+    <div style="margin-top:14px">
+      <button class="primary" id="btnSave">保存全部设置</button><span class="msg" id="saveMsg"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const coloKnown = ["","US","JP","HK","SG","KR","TW","DE","GB","CA","AU","IN","NL","SE"];
+
+async function loadSettings() {
+  const st = await (await fetch('/api/settings')).json();
+  $('cfnewDomain').value = st.cfnewDomain || '';
+  $('edgetunnelDomain').value = st.edgetunnelDomain || '';
+  $('verifyPath').value = st.verifyPath || '/';
+  $('enableCfnew').checked = !!st.enableCfnew;
+  $('cfnewPushURL').value = st.cfnewPushURL || '';
+  $('cfnewUUID').value = st.cfnewUUID || '';
+  $('cfnewPath').value = st.cfnewPath || '';
+  $('enableGithub').checked = !!st.enableGithub;
+  $('ghRepo').value = st.ghRepo || '';
+  $('ghToken').value = st.ghToken || '';
+  if (coloKnown.includes(st.colo || '')) { $('coloSel').value = st.colo || ''; }
+  else { $('coloSel').value = '__custom'; $('coloCustom').style.display = 'block'; $('coloCustom').value = st.colo || ''; }
+  $('minSpeed').value = st.minSpeed;
+  $('limit').value = st.limit;
+  $('maxLatency').value = st.maxLatency;
+  $('port').value = st.port;
+  $('threads').value = st.threads;
+  $('scheduleOn').checked = !!st.scheduleOn;
+  $('scheduleAt').value = st.scheduleAt || '04:37';
+  $('timeoutMin').value = st.timeoutMin || 20;
+}
+$('coloSel').addEventListener('change', () => {
+  $('coloCustom').style.display = $('coloSel').value === '__custom' ? 'block' : 'none';
+});
+function collect() {
+  return {
+    cfnewDomain: $('cfnewDomain').value.trim(),
+    edgetunnelDomain: $('edgetunnelDomain').value.trim(),
+    verifyPath: $('verifyPath').value.trim() || '/',
+    enableCfnew: $('enableCfnew').checked,
+    cfnewPushURL: $('cfnewPushURL').value.trim(),
+    cfnewUUID: $('cfnewUUID').value.trim(),
+    cfnewPath: $('cfnewPath').value.trim(),
+    enableGithub: $('enableGithub').checked,
+    ghRepo: $('ghRepo').value.trim(),
+    ghToken: $('ghToken').value.trim(),
+    colo: $('coloSel').value === '__custom' ? $('coloCustom').value.trim() : $('coloSel').value,
+    minSpeed: parseFloat($('minSpeed').value) || 0,
+    limit: parseInt($('limit').value) || 15,
+    maxLatency: parseFloat($('maxLatency').value) || 300,
+    port: parseInt($('port').value) || 443,
+    threads: parseInt($('threads').value) || 50,
+    scheduleOn: $('scheduleOn').checked,
+    scheduleAt: $('scheduleAt').value || '04:37',
+    timeoutMin: parseInt($('timeoutMin').value) || 20
+  };
+}
+$('btnSave').addEventListener('click', async () => {
+  const r = await fetch('/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(collect()) });
+  $('saveMsg').textContent = r.ok ? '已保存 ✓' : '保存失败';
+  setTimeout(() => $('saveMsg').textContent = '', 3000);
+});
+$('btnRun').addEventListener('click', async () => {
+  await fetch('/api/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(collect()) });
+  const r = await fetch('/api/run', { method: 'POST' });
+  $('runMsg').textContent = r.ok ? '已开始，日志里看进度' : '已在扫描中';
+  setTimeout(() => $('runMsg').textContent = '', 4000);
+  refresh();
+});
+function fillTable(el, rows) {
+  el.innerHTML = rows.length ? rows.map(x => '<tr><td>' + x.replace(/</g,'&lt;') + '</td></tr>').join('') : '<tr><td>（暂无，先跑一次扫描）</td></tr>';
+}
+async function refresh() {
+  try {
+    const st = await (await fetch('/api/status')).json();
+    $('stRun').textContent = st.running ? '扫描中…' : '空闲';
+    $('stRun').className = 'tag ' + (st.running ? 'run' : 'ok');
+    $('stLast').textContent = st.lastRun || '-';
+    $('btnRun').disabled = !!st.running;
+    fillTable($('tblCfnew'), st.cfnew || []);
+    fillTable($('tblEdt'), st.edgetunnel || []);
+    const log = $('log');
+    log.textContent = (st.log || []).join('\n');
+    log.scrollTop = log.scrollHeight;
+  } catch (e) {}
+}
+loadSettings();
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>

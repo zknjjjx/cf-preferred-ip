@@ -1,0 +1,1 @@
+{"luci-app-cfscan":{"description":"Grant access for luci-app-cfscan (iframe view of the cfscan Docker web UI)","read":{"uci":["cfscan"]},"write":{"uci":["cfscan"]}}}
